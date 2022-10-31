@@ -3,18 +3,15 @@ import { getDMMF, parseEnvValue } from '@prisma/internals';
 import { promises as fs } from 'fs';
 import path from 'path';
 import pluralize from 'pluralize';
-import { generate as PrismaTrpcShieldGenerator } from 'prisma-trpc-shield-generator/lib/prisma-generator';
 import { generate as PrismaZodGenerator } from 'prisma-zod-generator/lib/prisma-generator';
 import { configSchema } from './config';
 import {
-  generateBaseRouter,
-  generateCreateRouterImport,
   generateProcedure,
+  generateProcedureImports,
+  generateProcedureSchemaImports,
   generateRouterImport,
-  generateRouterSchemaImports,
-  generateShieldImport,
-  generatetRPCImport,
-  getInputTypeByOpName
+  generatetRPCProcedureImport,
+  generatetRPCRouterImport,
 } from './helpers';
 import { project } from './project';
 import removeDir from './utils/removeDir';
@@ -29,31 +26,6 @@ export async function generate(options: GeneratorOptions) {
   await removeDir(outputDir, true);
   await PrismaZodGenerator(options);
 
-  let shieldOutputPath: string;
-  if (config.withShield) {
-    const outputPath = options.generator.output.value;
-    shieldOutputPath =
-      (outputPath
-        .split(path.sep)
-        .slice(0, outputPath.split(path.sep).length - 1)
-        .join(path.sep) + '/shield')
-        .split(path.sep)
-        .join(path.posix.sep);
-
-    shieldOutputPath = path.relative(path.join(outputPath, 'routers', 'helpers'), shieldOutputPath)
-
-    await PrismaTrpcShieldGenerator({
-      ...options,
-      generator: {
-        ...options.generator,
-        output: {
-          ...options.generator.output,
-          value: shieldOutputPath,
-        },
-      },
-    });
-  }
-
   const prismaClientProvider = options.otherGenerators.find(
     (it) => parseEnvValue(it.provider) === 'prisma-client-js',
   );
@@ -65,32 +37,15 @@ export async function generate(options: GeneratorOptions) {
     previewFeatures: prismaClientProvider.previewFeatures,
   });
 
-  const createRouter = project.createSourceFile(
-    path.resolve(outputDir, 'routers', 'helpers', 'createRouter.ts'),
-    undefined,
-    { overwrite: true },
-  );
-
-  generatetRPCImport(createRouter);
-  if (config.withShield) {
-    generateShieldImport(createRouter, shieldOutputPath);
-  }
-  generateBaseRouter(createRouter, config);
-
-  createRouter.formatText({
-    indentSize: 2,
-  });
-
   const appRouter = project.createSourceFile(
     path.resolve(outputDir, 'routers', `index.ts`),
     undefined,
     { overwrite: true },
   );
 
-  generateCreateRouterImport(appRouter, config.withMiddleware);
-  appRouter.addStatements(/* ts */ `
-  export const appRouter = ${config.withMiddleware ? 'createProtectedRouter' : 'createRouter'
-    }()`);
+  generatetRPCRouterImport(appRouter, config.trpcPath);
+
+  const routers: string[] = [];
 
   prismaClientDmmf.mappings.modelOperations.forEach((modelOperation) => {
     const { model, ...operations } = modelOperation;
@@ -98,34 +53,49 @@ export async function generate(options: GeneratorOptions) {
     const hasCreateMany = Boolean(operations.createMany);
     generateRouterImport(appRouter, plural, model);
     const modelRouter = project.createSourceFile(
-      path.resolve(outputDir, 'routers', `${model}.router.ts`),
+      path.resolve(outputDir, 'routers', `${model}Router`, `index.ts`),
       undefined,
       { overwrite: true },
     );
 
-    generateCreateRouterImport(modelRouter, false);
-    generateRouterSchemaImports(
+    generatetRPCRouterImport(modelRouter, path.join('..', config.trpcPath));
+
+    generateProcedureImports(
       modelRouter,
       model,
       hasCreateMany,
       dataSource.provider,
     );
 
-    modelRouter.addStatements(/* ts */ `
-    export const ${plural}Router = createRouter()`);
+    const procedures: string[] = [];
+
     for (const [opType, opNameWithModel] of Object.entries(operations)) {
-      generateProcedure(
-        modelRouter,
-        opNameWithModel,
-        getInputTypeByOpName(opType, model),
-        model,
-        opType,
+      const modelProcedure = project.createSourceFile(
+        path.resolve(
+          outputDir,
+          'routers',
+          `${model}Router`,
+          `${opNameWithModel}.procedure.ts`,
+        ),
+        undefined,
+        { overwrite: true },
       );
+      generatetRPCProcedureImport(
+        modelProcedure,
+        path.join('..', config.trpcPath),
+      );
+      generateProcedureSchemaImports(modelProcedure, opType, model);
+      generateProcedure(modelProcedure, opNameWithModel, model, opType);
+      procedures.push(`${opNameWithModel}: ${opNameWithModel}Procedure`);
     }
+    modelRouter.addStatements(/* ts */ `
+    export const ${plural}Router =  router({${procedures.join(',\n')}})`);
     modelRouter.formatText({ indentSize: 2 });
-    appRouter.addStatements(/* ts */ `
-    .merge('${model.toLowerCase()}.', ${plural}Router)`);
+    routers.push(`${model.toLowerCase()}: ${plural}Router`);
   });
+
+  appRouter.addStatements(/* ts */ `
+  export const appRouter = router({${routers.join(',\n')}})`);
 
   appRouter.formatText({ indentSize: 2 });
   await project.save();

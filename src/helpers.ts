@@ -1,34 +1,66 @@
 import { SourceFile } from 'ts-morph';
-import { Config } from './config';
-import { uncapitalizeFirstLetter } from './utils/uncapitalizeFirstLetter';
+import {
+  capitalizeFirstLetter,
+  uncapitalizeFirstLetter,
+} from './utils/uncapitalizeFirstLetter';
 
-export const generateCreateRouterImport = (
+export const generatetRPCRouterImport = (
   sourceFile: SourceFile,
-  isProtectedMiddleware: boolean,
+  trpcPath: string,
 ) => {
   sourceFile.addImportDeclaration({
-    moduleSpecifier: './helpers/createRouter',
-    namedImports: [
-      isProtectedMiddleware ? 'createProtectedRouter' : 'createRouter',
-    ],
+    moduleSpecifier: trpcPath,
+    namedImports: ['router'],
   });
 };
 
-export const generatetRPCImport = (sourceFile: SourceFile) => {
+export const generatetRPCProcedureImport = (
+  sourceFile: SourceFile,
+  trpcPath: string,
+) => {
   sourceFile.addImportDeclaration({
-    moduleSpecifier: '@trpc/server',
-    namespaceImport: 'trpc',
+    moduleSpecifier: trpcPath,
+    namedImports: ['procedure'],
   });
 };
 
-export const generateShieldImport = (
+export const generateProcedureImports = (
   sourceFile: SourceFile,
-  shieldOutputPath: string,
+  name: string,
+  hasCreateMany: boolean,
+  provider: string,
 ) => {
-  sourceFile.addImportDeclaration({
-    moduleSpecifier: `${shieldOutputPath}/shield`,
-    namedImports: ['permissions'],
-  });
+  let statements = [
+    `import { findUnique${name}Procedure } from "./findUnique${name}.procedure";`,
+    `import { findFirst${name}Procedure } from "./findFirst${name}.procedure";`,
+    `import { findMany${name}Procedure } from "./findMany${name}.procedure";`,
+    `import { createOne${name}Procedure } from "./createOne${name}.procedure";`,
+  ];
+
+  if (hasCreateMany) {
+    statements.push(
+      `import { createMany${name}Procedure } from "./createMany${name}.procedure";`,
+    );
+  }
+
+  statements = statements.concat([
+    `import { deleteOne${name}Procedure } from "./deleteOne${name}.procedure";`,
+    `import { updateOne${name}Procedure } from "./updateOne${name}.procedure";`,
+    `import { deleteMany${name}Procedure } from "./deleteMany${name}.procedure";`,
+    `import { updateMany${name}Procedure } from "./updateMany${name}.procedure";`,
+    `import { upsertOne${name}Procedure } from "./upsertOne${name}.procedure";`,
+    `import { aggregate${name}Procedure } from "./aggregate${name}.procedure";`,
+    `import { groupBy${name}Procedure } from "./groupBy${name}.procedure";`,
+  ]);
+
+  if (provider === 'mongodb') {
+    statements = statements.concat([
+      `import { findRaw${name}Procedure } from "./${name}FindRaw.procedure";`,
+      `import { aggregateRaw${name}Procedure } from "./${name}AggregateRaw.procedure";`,
+    ]);
+  }
+
+  sourceFile.addStatements(/* ts */ statements.join('\n'));
 };
 
 export const generateRouterImport = (
@@ -37,51 +69,42 @@ export const generateRouterImport = (
   modelNameCamelCase: string,
 ) => {
   sourceFile.addImportDeclaration({
-    moduleSpecifier: `./${modelNameCamelCase}.router`,
+    moduleSpecifier: `./${modelNameCamelCase}Router`,
     namedImports: [`${modelNamePlural}Router`],
   });
 };
 
-export function generateBaseRouter(sourceFile: SourceFile, config: Config) {
-  sourceFile.addStatements(/* ts */ `
-  import { Context } from '${config.contextPath}';
-    
-  export function createRouter() {
-    return trpc.router<Context>();
-  }`);
-
-  const middlewares = [];
-  if (config.withMiddleware) {
-    middlewares.push(/* ts */ `
-    .middleware(({ ctx, next }) => {
-      console.log("inside middleware!")
-      return next();
-    })`);
+export const generateProcedureSchemaImports = (
+  sourceFile: SourceFile,
+  opName: string,
+  modelName: string,
+) => {
+  if (opName === 'aggregateRaw' || opName === 'findRaw') {
+    sourceFile.addImportDeclaration({
+      moduleSpecifier: `../../schemas/${opName}${modelName}${capitalizeFirstLetter(
+        opName,
+      )}.schema`,
+      namedImports: [
+        `${modelName}${capitalizeFirstLetter(opName)}ObjectSchema`,
+      ],
+    });
+    return;
   }
 
-  if (config.withShield) {
-    middlewares.push(/* ts */ `
-    .middleware(permissions)`);
-  }
-
-  sourceFile.addStatements(/* ts */ `
-    export function createProtectedRouter() {
-      return trpc
-        .router<Context>()
-        ${middlewares.join('\r')};
-    }`);
-}
+  sourceFile.addImportDeclaration({
+    moduleSpecifier: `../../schemas/${opName}${modelName}.schema`,
+    namedImports: [getInputTypeByOpName(opName, modelName)],
+  });
+};
 
 export function generateProcedure(
   sourceFile: SourceFile,
   name: string,
-  typeName: string,
   modelName: string,
   opType: string,
 ) {
   let input = 'input';
-  const nameWithoutModel = name.replace(modelName as string, '');
-  switch (nameWithoutModel) {
+  switch (opType) {
     case 'findUnique':
       input = '{ where: input.where }';
       break;
@@ -112,55 +135,14 @@ export function generateProcedure(
       break;
   }
   sourceFile.addStatements(/* ts */ `
-  .${getProcedureTypeByOpName(opType)}("${name}", {
-    input: ${typeName},
-    async resolve({ ctx, input }) {
-      const ${name} = await ctx.prisma.${uncapitalizeFirstLetter(
+export const ${name}Procedure = procedure
+  .input(${getInputTypeByOpName(opType, modelName)})
+  .${getProcedureTypeByOpName(opType)}(async ({ ctx, input }) => {
+    const ${name} = await ctx.prisma.${uncapitalizeFirstLetter(
     modelName,
-  )}.${opType.replace('One', '')}(${input});
-      return ${name};
-    },
+    )}.${opType.replace('One', '')}(${input});
+    return ${name};
   })`);
-}
-
-export function generateRouterSchemaImports(
-  sourceFile: SourceFile,
-  name: string,
-  hasCreateMany: boolean,
-  provider: string
-) {
-  let statements = [
-    `import { ${name}FindUniqueSchema } from "../schemas/findUnique${name}.schema";`,
-    `import { ${name}FindFirstSchema } from "../schemas/findFirst${name}.schema";`,
-    `import { ${name}FindManySchema } from "../schemas/findMany${name}.schema";`,
-    `import { ${name}CreateOneSchema } from "../schemas/createOne${name}.schema";`,
-  ];
-
-  if (hasCreateMany) {
-    statements.push(
-      `import { ${name}CreateManySchema } from "../schemas/createMany${name}.schema";`,
-    );
-  }
-
-  statements = statements.concat([
-    `import { ${name}DeleteOneSchema } from "../schemas/deleteOne${name}.schema";`,
-    `import { ${name}UpdateOneSchema } from "../schemas/updateOne${name}.schema";`,
-    `import { ${name}DeleteManySchema } from "../schemas/deleteMany${name}.schema";`,
-    `import { ${name}UpdateManySchema } from "../schemas/updateMany${name}.schema";`,
-    `import { ${name}UpsertSchema } from "../schemas/upsertOne${name}.schema";`,
-    `import { ${name}AggregateSchema } from "../schemas/aggregate${name}.schema";`,
-    `import { ${name}GroupBySchema } from "../schemas/groupBy${name}.schema";`,
-  ]);
-
-  if(provider === "mongodb") {
-    statements = statements.concat([
-      `import { ${name}FindRawObjectSchema } from "../schemas/objects/${name}FindRaw.schema";`,
-      `import { ${name}AggregateRawObjectSchema } from "../schemas/objects/${name}AggregateRaw.schema";`,
-    ]);
-  }
-
-
-  sourceFile.addStatements(/* ts */ statements.join('\n'));
 }
 
 export const getInputTypeByOpName = (opName: string, modelName: string) => {
