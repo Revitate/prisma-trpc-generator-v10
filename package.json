@@ -30,7 +30,7 @@
     "@prisma/generator-helper": "^4.3.1",
     "@prisma/internals": "^4.3.1",
     "pluralize": "^8.0.0",
-    "prisma-zod-generator": "git://github.com:Revitate/prisma-zod-generator.git",
+    "prisma-zod-generator": "git://github.com:Revitate/prisma-zod-generator.git#4676481bca383447354c947d9cce7018d01883f8",
     "ts-morph": "^16.0.0",
     "tslib": "^2.4.0"
   },
