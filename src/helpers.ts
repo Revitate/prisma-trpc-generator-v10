@@ -91,6 +91,22 @@ export const generateProcedureSchemaImports = (
     return;
   }
 
+  if (opName === 'findUniqueOrThrow') {
+    sourceFile.addImportDeclaration({
+      moduleSpecifier: `../../schemas/findUnique${modelName}.schema`,
+      namedImports: [getInputTypeByOpName('findUnique', modelName)],
+    });
+    return;
+  }
+
+  if (opName === 'findFirstOrThrow') {
+    sourceFile.addImportDeclaration({
+      moduleSpecifier: `../../schemas/findFirst${modelName}.schema`,
+      namedImports: [getInputTypeByOpName('findFirst', modelName)],
+    });
+    return;
+  }
+
   sourceFile.addImportDeclaration({
     moduleSpecifier: `../../schemas/${opName}${modelName}.schema`,
     namedImports: [getInputTypeByOpName(opName, modelName)],
@@ -140,7 +156,7 @@ export const ${name}Procedure = procedure
   .${getProcedureTypeByOpName(opType)}(async ({ ctx, input }) => {
     const ${name} = await ctx.prisma.${uncapitalizeFirstLetter(
     modelName,
-    )}.${opType.replace('One', '')}(${input});
+  )}.${opType.replace('One', '')}(${input});
     return ${name};
   })`);
 }
@@ -151,7 +167,13 @@ export const getInputTypeByOpName = (opName: string, modelName: string) => {
     case 'findUnique':
       inputType = `${modelName}FindUniqueSchema`;
       break;
+    case 'findUniqueOrThrow':
+      inputType = `${modelName}FindUniqueSchema`;
+      break;
     case 'findFirst':
+      inputType = `${modelName}FindFirstSchema`;
+      break;
+    case 'findFirstOrThrow':
       inputType = `${modelName}FindFirstSchema`;
       break;
     case 'findMany':
@@ -200,7 +222,9 @@ export const getProcedureTypeByOpName = (opName: string) => {
   let procType;
   switch (opName) {
     case 'findUnique':
+    case 'findUniqueOrThrow':
     case 'findFirst':
+    case 'findFirstOrThrow':
     case 'findMany':
     case 'findRaw':
     case 'aggregate':
