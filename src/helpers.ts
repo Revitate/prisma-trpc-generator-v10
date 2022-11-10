@@ -32,7 +32,9 @@ export const generateProcedureImports = (
 ) => {
   let statements = [
     `import { findUnique${name}Procedure } from "./findUnique${name}.procedure";`,
+    `import { findUnique${name}OrThrowProcedure } from "./findUnique${name}OrThrow.procedure";`,
     `import { findFirst${name}Procedure } from "./findFirst${name}.procedure";`,
+    `import { findFirst${name}OrThrowProcedure } from "./findFirst${name}OrThrow.procedure";`,
     `import { findMany${name}Procedure } from "./findMany${name}.procedure";`,
     `import { createOne${name}Procedure } from "./createOne${name}.procedure";`,
   ];
