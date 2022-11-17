@@ -25,7 +25,8 @@ export async function generate(options: GeneratorOptions) {
   await fs.mkdir(outputDir, { recursive: true });
   await removeDir(outputDir, true);
 
-  options.generator.config["isGenerateSelect"] = "true";
+  options.generator.config['isGenerateSelect'] = 'true';
+  options.generator.config['isGenerateInclude'] = 'true';
   await PrismaZodGenerator(options);
 
   const prismaClientProvider = options.otherGenerators.find(
