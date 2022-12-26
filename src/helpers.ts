@@ -124,13 +124,13 @@ export function generateProcedure(
   let input = 'input';
   switch (opType) {
     case 'findUnique':
-      input = '{ where: input.where }';
+      input = '{ where: input.where, include: input.include, select: input.select }';
       break;
     case 'findFirst':
     case 'findMany':
       break;
     case 'deleteOne':
-      input = '{ where: input.where }';
+      input = '{ where: input.where, include: input.include, select: input.select }';
       break;
     case 'deleteMany':
     case 'updateMany':
@@ -138,18 +138,18 @@ export function generateProcedure(
       break;
     case 'groupBy':
       input =
-        '{ where: input.where, orderBy: input.orderBy, by: input.by, having: input.having, take: input.take, skip: input.skip }';
+        '{ where: input.where, include: input.include, select: input.select, orderBy: input.orderBy, by: input.by, having: input.having, take: input.take, skip: input.skip }';
       break;
     case 'createOne':
     case 'createMany':
       input = '{ data: input.data }';
       break;
     case 'updateOne':
-      input = '{ where: input.where, data: input.data }';
+      input = '{ where: input.where, include: input.include, select: input.select, data: input.data }';
       break;
     case 'upsertOne':
       input =
-        '{ where: input.where, create: input.create, update: input.update }';
+        '{ where: input.where, include: input.include, select: input.select, create: input.create, update: input.update }';
       break;
   }
   sourceFile.addStatements(/* ts */ `
