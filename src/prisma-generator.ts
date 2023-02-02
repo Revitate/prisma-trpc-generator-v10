@@ -46,7 +46,10 @@ export async function generate(options: GeneratorOptions) {
     { overwrite: true },
   );
 
-  generatetRPCRouterImport(appRouter, config.trpcPath);
+  // hot fix for windows
+  const trpcPath = config.trpcPath.split(path.sep).join('/');
+
+  generatetRPCRouterImport(appRouter, trpcPath);
 
   const routers: string[] = [];
 
@@ -61,7 +64,7 @@ export async function generate(options: GeneratorOptions) {
       { overwrite: true },
     );
 
-    generatetRPCRouterImport(modelRouter, path.join('..', config.trpcPath));
+    generatetRPCRouterImport(modelRouter, path.join('..', trpcPath));
 
     generateProcedureImports(
       modelRouter,
@@ -83,10 +86,7 @@ export async function generate(options: GeneratorOptions) {
         undefined,
         { overwrite: true },
       );
-      generatetRPCProcedureImport(
-        modelProcedure,
-        path.join('..', config.trpcPath),
-      );
+      generatetRPCProcedureImport(modelProcedure, path.join('..', trpcPath));
       generateProcedureSchemaImports(modelProcedure, opType, model);
       generateProcedure(modelProcedure, opNameWithModel, model, opType);
       procedures.push(`${opNameWithModel}: ${opNameWithModel}Procedure`);
