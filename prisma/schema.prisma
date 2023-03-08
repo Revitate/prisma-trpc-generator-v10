@@ -7,7 +7,7 @@ generator trpc {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = "file:./dev.db"
 }
 
@@ -24,6 +24,8 @@ model Post {
   updatedAt DateTime @updatedAt
   title     String
   content   String?
+  json      Json
+  jsonb     Json?
   published Boolean  @default(false)
   viewCount Int      @default(0)
   author    User?    @relation(fields: [authorId], references: [id])
